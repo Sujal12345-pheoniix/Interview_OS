@@ -1,0 +1,64 @@
+# .cursorrules for InterviewOS
+
+You are an expert full-stack engineer building **InterviewOS** — a production-grade AI-powered Interview Operating System.
+
+## Project Context
+- **Frontend**: Next.js 15 App Router, TypeScript strict mode, Tailwind CSS, ShadCN UI, Framer Motion
+- **Backend**: FastAPI, Python 3.11+, SQLAlchemy 2.0 (async), LangGraph, Alembic
+- **Database**: PostgreSQL with pgvector, Redis, Qdrant vector DB
+- **AI**: Gemini 2.5 Flash (primary LLM), Deepgram STT, Cartesia TTS
+- **Auth**: Clerk
+- **Queue**: Celery + Redis
+
+## Backend Rules
+- Always use `async def` for all route handlers and database operations
+- Use SQLAlchemy 2.0 style with `Mapped`, `mapped_column`, `AsyncSession`
+- Every database call must use `async with` or `await`
+- Use `pydantic.BaseModel` v2 syntax (model_config, not class Config)
+- Agents should always return typed dataclasses or Pydantic models
+- Add proper error handling with FastAPI HTTPException
+- Log with loguru, never with print()
+- Use `from __future__ import annotations` in all Python files
+
+## Frontend Rules
+- Always use TypeScript with strict types, never use `any`
+- Use `"use client"` only when necessary (prefer Server Components)
+- All animations use Framer Motion, never CSS animations alone
+- Colors must come from the design system (zinc/accent palette)
+- Components go in `src/components/`, pages in `src/app/`
+- Use TanStack Query for all server state, Zustand for client state
+- Forms always use react-hook-form + zod validation
+
+## Design Rules
+- Background: `bg-zinc-950` (#09090b)
+- Cards: glassmorphism with `backdrop-blur-sm bg-white/5 border-white/10`
+- Primary accent: violet-600 (#7c3aed)
+- AI/Voice accent: cyan-500 (#06b6d4)
+- Success: emerald-500, Error: rose-500, Warning: amber-500
+- Typography: Geist Sans for UI, Geist Mono for code/scores
+- All interactive elements must have hover AND focus states
+
+## Agent Rules (LangGraph)
+- All agents receive and return `InterviewState` TypedDict
+- Agents must handle Gemini API failures gracefully
+- Always parse LLM output as JSON with try/except
+- Log agent execution time for monitoring
+- Follow prompts from `backend/app/prompts/`
+
+## API Rules
+- All API routes are versioned: `/api/v1/`
+- All responses follow `{ data: T, message: str, success: bool }` format
+- Paginated lists follow `{ data: T[], total: int, page: int, limit: int }`
+- Never return database model directly, always use Pydantic response schemas
+- WebSocket messages follow the protocol in docs/API_DESIGN.md
+
+## File Organization
+- New API endpoints: `backend/app/api/v1/`
+- New agents: `backend/app/agents/`
+- New prompts: `backend/app/prompts/`
+- New DB models: `backend/app/models/`
+- New Pydantic schemas: `backend/app/schemas/`
+- New React components: `frontend/src/components/{category}/`
+- New pages: `frontend/src/app/(dashboard)/`
+- New hooks: `frontend/src/hooks/`
+- New utilities: `frontend/src/lib/`

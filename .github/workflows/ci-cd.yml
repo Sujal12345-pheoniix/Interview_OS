@@ -1,0 +1,219 @@
+name: InterviewOS CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ============================================================
+  # Lint & Type Check
+  # ============================================================
+  lint-frontend:
+    name: Frontend Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
+  lint-backend:
+    name: Backend Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install ruff mypy
+      - run: ruff check app/
+      - run: mypy app/ --ignore-missing-imports
+
+  # ============================================================
+  # Tests
+  # ============================================================
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: interviewos_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: pip install pytest pytest-asyncio pytest-cov httpx
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/interviewos_test
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: test
+          SECRET_KEY: test-secret-key
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: pytest tests/ -v --cov=app --cov-report=xml
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test -- --coverage --watchAll=false
+
+  # ============================================================
+  # Build & Push Docker Images
+  # ============================================================
+  build-backend:
+    name: Build Backend Docker Image
+    runs-on: ubuntu-latest
+    needs: test-backend
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================
+  # Deploy Frontend to Vercel
+  # ============================================================
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: [test-frontend, test-backend]
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install -g vercel
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  # ============================================================
+  # Deploy Backend to Fly.io
+  # ============================================================
+  deploy-backend:
+    name: Deploy Backend to Fly.io
+    runs-on: ubuntu-latest
+    needs: [build-backend]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly.io
+        working-directory: ./backend
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # ============================================================
+  # Run Database Migrations
+  # ============================================================
+  migrate:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Run Alembic Migrations
+        working-directory: ./backend
+        run: flyctl ssh console --command "alembic upgrade head"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # ============================================================
+  # Notify on Failure
+  # ============================================================
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, deploy-backend, migrate]
+    if: failure()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "❌ InterviewOS deployment failed on ${{ github.ref }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
