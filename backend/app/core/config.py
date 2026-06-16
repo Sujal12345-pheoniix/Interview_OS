@@ -39,9 +39,24 @@ class Settings(BaseSettings):
     DATABASE_POOL_RECYCLE: int = 3600
 
     @property
+    def clean_database_url(self) -> str:
+        url = self.DATABASE_URL.strip()
+        # Fix double colon typo (e.g., postgresql+asyncpg:://)
+        if "postgresql+asyncpg:://" in url:
+            url = url.replace("postgresql+asyncpg:://", "postgresql+asyncpg://")
+        elif "postgres:://" in url:
+            url = url.replace("postgres:://", "postgresql+asyncpg://")
+        # Fix standard postgres scheme to use asyncpg
+        elif url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[11:]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+asyncpg://" + url[13:]
+        return url
+
+    @property
     def sync_database_url(self) -> str:
         """Returns synchronous DB URL for Alembic migrations"""
-        return self.DATABASE_URL.replace("+asyncpg", "+psycopg2")
+        return self.clean_database_url.replace("+asyncpg", "+psycopg2")
 
     # ─── Redis ────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
