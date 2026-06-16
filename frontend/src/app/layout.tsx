@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "InterviewOS",
   description: "Next-gen AI interview operating system.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

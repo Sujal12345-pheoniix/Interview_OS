@@ -27,7 +27,7 @@ export default function Home() {
       {/* Header / Nav */}
       <header className="fixed top-0 w-full z-50 glass-header py-4 px-6 md:px-12 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <Brain className="w-8 h-8 text-violet-500 animate-pulse" />
+          <img src="/favicon.png" alt="Brain Logo" className="w-8 h-8 object-contain animate-pulse" />
           <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">InterviewOS</span>
         </div>
         <nav className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
@@ -114,7 +114,7 @@ export default function Home() {
       <footer className="border-t border-zinc-900 py-12 px-6 md:px-12 text-center text-sm text-zinc-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
-            <Brain className="w-6 h-6 text-violet-500" />
+            <img src="/favicon.png" alt="Brain Logo" className="w-6 h-6 object-contain" />
             <span className="font-bold text-white">InterviewOS</span>
           </div>
           <div>© 2026 InterviewOS. Built for elite preparation workflows.</div>

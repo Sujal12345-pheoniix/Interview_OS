@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar Navigation */}
       <aside className="w-full md:w-64 border-r border-zinc-800 bg-[#0f0f12] flex flex-col p-6 shrink-0 gap-6">
         <div className="flex items-center gap-2 mb-4">
-          <Brain className="w-8 h-8 text-violet-500" />
+          <img src="/favicon.png" alt="Brain Logo" className="w-8 h-8 object-contain" />
           <span className="text-xl font-bold tracking-tight">InterviewOS</span>
         </div>
 
